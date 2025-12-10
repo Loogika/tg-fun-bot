@@ -1,0 +1,12 @@
+from aiogram import Dispatcher
+from bot.user.commands import user_router
+from bot.admin.commands import admin_router
+import logging
+
+logger = logging.getLogger("bot")
+
+def setup_routers(dp: Dispatcher):
+    logger.info("Подключаем роутер админа")
+    dp.include_router(admin_router)
+    logger.info("Подключаем роутер пользователя")
+    dp.include_router(user_router)
