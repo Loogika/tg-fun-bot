@@ -2,7 +2,7 @@ from aiogram import Router
 from aiogram.filters import Command
 from aiogram.types import Message
 from config import ADMIN_ID
-from bot.user.handlers import start_handler, message_logger_handler
+from bot.handlers.user.handlers import start_handler, message_logger_handler
 import logging
 
 logger = logging.getLogger("bot")
