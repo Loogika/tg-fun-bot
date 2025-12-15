@@ -6,7 +6,7 @@ from aiogram.filters import Command
 from aiogram import F
 from bot.handlers.user.core import start_handler, message_logger_handler, ADD_STICKERS_BTN_TEXT
 from bot.handlers.user.core import send_start_menu
-from storage.google_sheets import add_pack_to_user
+from storage.google_sheets import add_pack_to_user, get_user_packs
 
 import logging
 
@@ -43,28 +43,40 @@ async def stream_handler(message: Message, state: FSMContext):
     else:
         await message.answer("Неизвестный тип сообщения")
 
-
 def pack_open_kb(pack_name: str):
     kb = InlineKeyboardBuilder()
     kb.button(text="📦 Открыть стикерпак", url=f"https://t.me/addstickers/{pack_name}")
     kb.adjust(1)
     return kb.as_markup()
 
+def packs_select_kb(packs: list[str]):
+    kb = InlineKeyboardBuilder()
+    for i, name in enumerate(packs[:20]):  # ограничим, чтобы не раздувать
+        kb.button(text=name, callback_data=f"stickers:pick:{i}")
+    kb.adjust(1)
+    return kb.as_markup()
+
 @user_router.message(AddStickerFSM.WAIT_PACK)
 async def set_pack_name(message: Message, state: FSMContext):
-    logger.info("SET_PACK_NAME: user_id=%s text=%r", message.from_user.id, message.text)
+    data = await state.get_data()
+    mode = data.get("mode")
 
+    if mode == "edit":
+        packs = get_user_packs(message.from_user.id)
+        await message.answer("Выбирай пак кнопкой:", reply_markup=packs_select_kb(packs))
+        return
+
+    # mode == "create"
     pack_name = message.text.strip()
     await state.update_data(pack_name=pack_name)
     await state.set_state(AddStickerFSM.STREAM)
 
-    packs = add_pack_to_user(message.from_user.id, pack_name)
-    logger.info("PACK_ADDED: user_id=%s pack=%s packs=%s", message.from_user.id, pack_name, packs)
+    add_pack_to_user(message.from_user.id, pack_name)
 
-    await message.answer(f"Пак выбран: {pack_name}\nТеперь отправляй стикеры или картинки.")
-
-
-
+    await message.answer(
+        f"Пак выбран: {pack_name}\nТеперь отправляй стикеры или картинки.",
+        reply_markup=pack_open_kb(pack_name)
+    )
 
 @user_router.callback_query(F.data == "stickers:create")
 async def cb_create_pack(call: CallbackQuery, state: FSMContext):
@@ -77,13 +89,50 @@ async def cb_create_pack(call: CallbackQuery, state: FSMContext):
     )
     await call.answer()
 
+@user_router.callback_query(F.data == "stickers:create")
+async def cb_create_pack(call: CallbackQuery, state: FSMContext):
+    await state.clear()
+    await state.update_data(mode="create")
+    await state.set_state(AddStickerFSM.WAIT_PACK)
+
+    await call.message.answer(
+        "Ок. Пришли short_name для НОВОГО пака.\n"
+        "Пример: my_pack_by_bot\n\n"
+        "Остановить: /stop"
+    )
+    await call.answer()
+
 @user_router.callback_query(F.data == "stickers:edit")
 async def cb_edit_pack(call: CallbackQuery, state: FSMContext):
     await state.clear()
+    await state.update_data(mode="edit")
     await state.set_state(AddStickerFSM.WAIT_PACK)
+
+    packs = get_user_packs(call.from_user.id)
+    if not packs:
+        await call.message.answer("У тебя пока нет сохранённых паков. Сначала создай новый.")
+        await send_start_menu(call.message)
+        await call.answer()
+        return
+
+    await call.message.answer("Выбери стикерпак:", reply_markup=packs_select_kb(packs))
+    await call.answer()
+
+@user_router.callback_query(F.data.startswith("stickers:pick:"))
+async def cb_pick_pack(call: CallbackQuery, state: FSMContext):
+    idx = int(call.data.split(":")[-1])
+    packs = get_user_packs(call.from_user.id)
+
+    if idx < 0 or idx >= len(packs):
+        await call.answer("Пак не найден. Обнови список.", show_alert=True)
+        return
+
+    pack_name = packs[idx]
+    await state.update_data(pack_name=pack_name)
+    await state.set_state(AddStickerFSM.STREAM)
+
     await call.message.answer(
-        "Пришли short_name СУЩЕСТВУЮЩЕГО пака.\n"
-        "Пример: my_pack_by_bot\n\n"
-        "Остановить: /stop"
+        f"Пак выбран: {pack_name}\nТеперь отправляй стикеры или картинки.",
+        reply_markup=pack_open_kb(pack_name)
     )
     await call.answer()
