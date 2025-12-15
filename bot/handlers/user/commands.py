@@ -78,16 +78,6 @@ async def set_pack_name(message: Message, state: FSMContext):
         reply_markup=pack_open_kb(pack_name)
     )
 
-@user_router.callback_query(F.data == "stickers:create")
-async def cb_create_pack(call: CallbackQuery, state: FSMContext):
-    await state.clear()
-    await state.set_state(AddStickerFSM.WAIT_PACK)
-    await call.message.answer(
-        "Ок. Пришли short_name для НОВОГО пака.\n"
-        "Пример: my_pack_by_bot\n\n"
-        "Остановить: /stop"
-    )
-    await call.answer()
 
 @user_router.callback_query(F.data == "stickers:create")
 async def cb_create_pack(call: CallbackQuery, state: FSMContext):
