@@ -17,7 +17,7 @@ async def main():
 
     logger.info("Бот запускается...")
     try:
-        #Попытка запуска бота
+        # Попытка запуска бота (старт long-polling и обработка апдейтов от тг)
         await dp.start_polling(bot)
     except asyncio.CancelledError:
         logger.info("Polling отменён")

@@ -6,7 +6,13 @@ import logging
 logger = logging.getLogger("bot")
 ADD_STICKERS_BTN_TEXT = "➕ Добавить стикеры"
 
+# Проверка регистрации пользователя при команде /start
+async def start_handler(message: Message):
+    user = message.from_user
+    add_user_if_not_exists(user.id, user.username)
+    await send_start_menu(message)
 
+# Стартовое меню разметка с коллбеками которые отправляются программе из тг при нажатии кнопки
 def start_menu_kb():
     kb = InlineKeyboardBuilder()
     kb.button(text="🆕 Создать стикерпак", callback_data="stickers:create")
@@ -14,13 +20,8 @@ def start_menu_kb():
     kb.adjust(1)
     return kb.as_markup()
 
-# Проверка регистрации пользователя при команде /start
-async def start_handler(message: Message):
-    user = message.from_user
-    add_user_if_not_exists(user.id, user.username)
-    await send_start_menu(message)
-
 # Последующая точка входа после /start или /stop
+# Задаем вопрос: "что делаем?" и используем заранее заготовленные inline-кнопки
 async def send_start_menu(message: Message):
     await message.answer("Что делаем?", reply_markup=start_menu_kb())
 

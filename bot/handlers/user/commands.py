@@ -1,5 +1,5 @@
 from aiogram import Router
-from aiogram.types import Message, CallbackQuery
+from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from aiogram.fsm.context import FSMContext
 from aiogram.filters import Command
@@ -8,16 +8,21 @@ from bot.handlers.user.core import start_handler, message_logger_handler, ADD_ST
 from bot.handlers.user.core import send_start_menu
 from storage.google_sheets import add_pack_to_user, get_user_packs
 
+
 import logging
 
 from bot.fsm.add_sticker import AddStickerFSM
 
+# Подключаем логинг
 logger = logging.getLogger("bot")
+
+# Регистрируем роутер, который будет отвечать за написанные ниже команды
 user_router = Router()
 
 # Регистрируем команду /start
 user_router.message.register(start_handler, Command("start"))
 
+# Команда /stop
 @user_router.message(Command("stop"))
 async def stop_cmd(message: Message, state: FSMContext):
     await state.clear()
@@ -32,16 +37,20 @@ async def stop_cmd(message: Message, state: FSMContext):
 # STREAM handler заглушка
 @user_router.message(AddStickerFSM.STREAM)
 async def stream_handler(message: Message, state: FSMContext):
+    data = await state.get_data()
+    pack_name = data.get("pack_name")
+
     if message.sticker:
-        await message.answer("Получен стикер")
+        text = "Получен стикер"
     elif message.photo:
-        await message.answer("Получено фото")
-    elif message.document and message.document.mime_type.startswith("image/"):
-        await message.answer("Получен документ-изображение")
+        text = "Получено фото"
+    elif message.document and message.document.mime_type and message.document.mime_type.startswith("image/"):
+        text = "Получен документ-изображение"
     elif message.text:
-        await message.answer("Получен текст (можно для emoji позже)")
+        text = "Получен текст (позже можно использовать для emoji)"
     else:
-        await message.answer("Неизвестный тип сообщения")
+        text = "Неизвестный тип сообщения"
+    await message.answer(text, reply_markup=stream_kb(pack_name))
 
 def pack_open_kb(pack_name: str):
     kb = InlineKeyboardBuilder()
@@ -78,6 +87,20 @@ async def set_pack_name(message: Message, state: FSMContext):
         reply_markup=pack_open_kb(pack_name)
     )
 
+def stream_kb(pack_name: str | None = None) -> InlineKeyboardMarkup:
+    kb = InlineKeyboardBuilder()
+    if pack_name:
+        kb.button(text="📦 Открыть пак", url=f"https://t.me/addstickers/{pack_name}")
+    kb.button(text="⛔ Остановить редактирование", callback_data="stickers:stop_edit")
+    kb.adjust(1)
+    return kb.as_markup()
+
+@user_router.callback_query(F.data == "stickers:stop_edit")
+async def cb_stop_edit(call: CallbackQuery, state: FSMContext):
+    await state.clear()
+    await call.message.answer("Ок, остановил редактирование.")
+    await send_start_menu(call.message)
+    await call.answer()
 
 @user_router.callback_query(F.data == "stickers:create")
 async def cb_create_pack(call: CallbackQuery, state: FSMContext):
