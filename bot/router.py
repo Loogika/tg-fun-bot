@@ -1,5 +1,5 @@
 from aiogram import Dispatcher
-from bot.handlers.user.commands import user_router
+from bot.handlers.user.router import user_router
 # from bot.handlers.admin.commands import admin_router
 
 import logging
